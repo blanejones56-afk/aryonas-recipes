@@ -622,11 +622,11 @@
     animation: slideUp 0.25s ease-out;
   }
   .page.active { display: block; }
-  .page#groceryPage, .page#mealPlannerPage {
+  .page#groceryPage, .page#mealPlannerPage, .page#pantryPage {
     position: static;
     animation: none;
   }
-  .page#groceryPage.active, .page#mealPlannerPage.active {
+  .page#groceryPage.active, .page#mealPlannerPage.active, .page#pantryPage.active {
     position: fixed;
   }
   @keyframes slideUp {
@@ -1788,7 +1788,6 @@
 
 <script>
 // ---- FIREBASE CLOUD SYNC ----
-// PASTE YOUR FIREBASE CONFIG BELOW (replace the placeholder)
 const firebaseConfig = {
   apiKey: "AIzaSyBgyAoDEy6ssceGrpGRUWEN5quz1GznPZE",
   authDomain: "aryonas-recipes.firebaseapp.com",
@@ -1817,6 +1816,7 @@ try {
 }
 
 // Cloud sync helper - saves to Firestore
+let cloudErrorShown = false;
 function cloudSave(collection, data) {
   if (!firebaseReady || !db) return;
   try {
@@ -1825,8 +1825,16 @@ function cloudSave(collection, data) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(() => {
       console.log('☁️ Synced ' + collection);
+      $('cloudIndicator').textContent = '☁️';
+      $('cloudIndicator').title = 'Cloud sync active';
     }).catch(err => {
       console.warn('Cloud save failed for ' + collection + ':', err);
+      $('cloudIndicator').textContent = '⚠️';
+      $('cloudIndicator').title = 'Cloud sync error - check Firestore rules';
+      if (!cloudErrorShown && err.code === 'permission-denied') {
+        cloudErrorShown = true;
+        showToast('Cloud sync blocked - check Firestore rules');
+      }
     });
   } catch (e) {
     console.warn('Cloud save error:', e);
@@ -1845,6 +1853,10 @@ function cloudLoad(collection) {
     })
     .catch(err => {
       console.warn('Cloud load failed for ' + collection + ':', err);
+      if (err.code === 'permission-denied') {
+        $('cloudIndicator').textContent = '⚠️';
+        $('cloudIndicator').title = 'Cloud sync error - check Firestore rules';
+      }
       return null;
     });
 }
@@ -3207,6 +3219,16 @@ $('darkToggle').addEventListener('click', () => {
   applyDarkMode(isDark);
   localStorage.setItem('aryonasDarkMode', isDark);
   showToast(isDark ? 'Dark mode on' : 'Light mode on');
+});
+
+// ---- CLOUD INDICATOR ----
+$('cloudIndicator').addEventListener('click', () => {
+  if (!firebaseReady) {
+    showToast('Cloud sync not configured');
+    return;
+  }
+  showToast('Syncing with cloud...');
+  initialCloudSync();
 });
 
 // ---- INIT ----
