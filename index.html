@@ -1578,6 +1578,7 @@
 </style>
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
@@ -1890,38 +1891,72 @@
 </div>
 
 <script>
-// ---- LOGIN GATE ----
+// ---- LOGIN GATE (Firebase Auth) ----
+const AUTH_EMAIL = 'aryonaa@aryonas-recipes.app';
 const APP_USER = 'aryonaa';
-const APP_PASS = 'KyraBlane';
 
-function checkLogin() {
-  return sessionStorage.getItem('aryonasLoggedIn') === 'true';
-}
+// $ helper needed early
+const $ = id => document.getElementById(id);
+
+let appInitialized = false;
 
 function doLogin() {
   const user = $('loginUser').value.trim();
   const pass = $('loginPass').value;
-  if (user === APP_USER && pass === APP_PASS) {
-    sessionStorage.setItem('aryonasLoggedIn', 'true');
-    showApp();
-    renderHome();
-    initialCloudSync();
-    $('loginError').textContent = '';
-  } else {
-    $('loginError').textContent = 'Wrong username or password';
-    $('loginPass').value = '';
+  if (!user || !pass) {
+    $('loginError').textContent = 'Enter username and password';
+    return;
   }
+  $('loginBtn').disabled = true;
+  $('loginBtn').textContent = 'Signing in...';
+  $('loginError').textContent = '';
+
+  const email = user + '@aryonas-recipes.app';
+
+  firebase.auth().signInWithEmailAndPassword(email, pass)
+    .then(() => {
+      // Success — onAuthStateChanged will handle showing the app
+    })
+    .catch(err => {
+      if (err.code === 'auth/user-not-found' && user === APP_USER) {
+        // First time — create the account
+        firebase.auth().createUserWithEmailAndPassword(email, pass)
+          .then(() => {
+            // Success — onAuthStateChanged will handle it
+          })
+          .catch(createErr => {
+            $('loginError').textContent = 'Could not create account. Try again.';
+            $('loginBtn').disabled = false;
+            $('loginBtn').textContent = 'Sign In';
+          });
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        $('loginError').textContent = 'Wrong username or password';
+        $('loginPass').value = '';
+        $('loginBtn').disabled = false;
+        $('loginBtn').textContent = 'Sign In';
+      } else {
+        $('loginError').textContent = 'Sign in failed. Try again.';
+        $('loginBtn').disabled = false;
+        $('loginBtn').textContent = 'Sign In';
+      }
+    });
 }
 
 function doLogout() {
-  sessionStorage.removeItem('aryonasLoggedIn');
-  hideApp();
+  firebase.auth().signOut();
 }
 
 function showApp() {
   $('loginScreen').classList.add('hidden');
   $('home').style.display = 'block';
   $('bottomNav').style.display = 'flex';
+  $('loginBtn').disabled = false;
+  $('loginBtn').textContent = 'Sign In';
+  if (!appInitialized) {
+    appInitialized = true;
+    renderHome();
+    initialCloudSync();
+  }
 }
 
 function hideApp() {
@@ -1936,21 +1971,14 @@ function hideApp() {
   $('loginUser').value = '';
   $('loginPass').value = '';
   $('loginError').textContent = '';
+  appInitialized = false;
 }
-
-// $ helper needed early
-const $ = id => document.getElementById(id);
 
 // Login button & enter key
 $('loginBtn').addEventListener('click', doLogin);
 $('loginPass').addEventListener('keypress', (e) => { if (e.key === 'Enter') doLogin(); });
 $('loginUser').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('loginPass').focus(); });
 $('logoutBtn').addEventListener('click', doLogout);
-
-// Check login on load
-if (checkLogin()) {
-  showApp();
-}
 
 // ---- FIREBASE CLOUD SYNC ----
 const firebaseConfig = {
@@ -1973,6 +2001,15 @@ try {
     db = firebase.firestore();
     firebaseReady = true;
     console.log('☁️ Cloud sync enabled!');
+
+    // Listen for auth state changes
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        showApp();
+      } else {
+        hideApp();
+      }
+    });
   } else {
     console.log('📱 Running in offline mode (Firebase not configured)');
   }
@@ -3396,10 +3433,7 @@ $('cloudIndicator').addEventListener('click', () => {
 });
 
 // ---- INIT ----
-if (checkLogin()) {
-  renderHome();
-  initialCloudSync();
-}
+// Auth state listener in Firebase init handles showing/hiding the app
 </script>
 </body>
 </html>
