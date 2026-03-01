@@ -1913,29 +1913,32 @@ function doLogin() {
 
   const email = user + '@aryonas-recipes.app';
 
+  // Try sign in first, if no account exists create one
   firebase.auth().signInWithEmailAndPassword(email, pass)
     .then(() => {
       // Success — onAuthStateChanged will handle showing the app
     })
     .catch(err => {
-      if (err.code === 'auth/user-not-found' && user === APP_USER) {
-        // First time — create the account
+      // If account doesn't exist yet and username matches, create it
+      if ((err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') && user === APP_USER) {
         firebase.auth().createUserWithEmailAndPassword(email, pass)
           .then(() => {
-            // Success — onAuthStateChanged will handle it
+            // Account created — onAuthStateChanged will handle it
           })
           .catch(createErr => {
-            $('loginError').textContent = 'Could not create account. Try again.';
+            if (createErr.code === 'auth/email-already-in-use') {
+              // Account exists but wrong password
+              $('loginError').textContent = 'Wrong password';
+            } else {
+              $('loginError').textContent = 'Sign in failed. Try again.';
+            }
+            $('loginPass').value = '';
             $('loginBtn').disabled = false;
             $('loginBtn').textContent = 'Sign In';
           });
-      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      } else {
         $('loginError').textContent = 'Wrong username or password';
         $('loginPass').value = '';
-        $('loginBtn').disabled = false;
-        $('loginBtn').textContent = 'Sign In';
-      } else {
-        $('loginError').textContent = 'Sign in failed. Try again.';
         $('loginBtn').disabled = false;
         $('loginBtn').textContent = 'Sign In';
       }
