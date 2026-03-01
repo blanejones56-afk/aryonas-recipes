@@ -383,42 +383,50 @@
     margin-top: 12px;
     min-height: 20px;
   }
+  /* Header toolbar row */
+  .header-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    margin-bottom: 10px;
+  }
+  .header-toolbar-left,
+  .header-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .logout-btn {
-    position: absolute;
-    top: 54px;
-    left: 16px;
-    padding: 8px 14px;
+    padding: 6px 12px;
     border-radius: 50px;
     border: 2px solid rgba(255,255,255,0.3);
     background: rgba(255,255,255,0.15);
     color: white;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     cursor: pointer;
     font-family: 'Nunito', sans-serif;
-    z-index: 10;
     transition: all 0.2s;
+    white-space: nowrap;
   }
   .logout-btn:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
 
-  /* Dark mode toggle */
+  /* Dark mode / backup toggle buttons */
   .dark-toggle {
-    position: absolute;
-    top: 54px;
-    right: 16px;
-    width: 42px;
-    height: 42px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,0.3);
     background: rgba(255,255,255,0.15);
     color: white;
-    font-size: 20px;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    z-index: 10;
+    flex-shrink: 0;
   }
   .dark-toggle:active { transform: scale(0.9); background: rgba(255,255,255,0.3); }
 
@@ -428,13 +436,17 @@
     color: var(--text-dark);
     min-height: 100vh;
     padding-bottom: 80px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
   }
 
   /* Header */
   .header {
     background: linear-gradient(135deg, var(--sage), var(--sage-dark));
     color: white;
-    padding: 50px 20px 16px;
+    padding: 44px 16px 16px;
     text-align: center;
   }
   .header h1 {
@@ -708,8 +720,10 @@
     background: var(--cream);
     z-index: 200;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
     display: none;
-    animation: slideUp 0.25s ease-out;
+    animation: slideUp 0.3s ease-out;
   }
   .page.active { display: block; }
   .page#groceryPage, .page#mealPlannerPage, .page#pantryPage {
@@ -1597,13 +1611,19 @@
 
 <!-- HOME SCREEN -->
 <div id="home" style="display:none;">
-  <div class="header" style="position:relative;">
-    <button class="logout-btn" id="logoutBtn">Sign Out</button>
+  <div class="header">
+    <div class="header-toolbar">
+      <div class="header-toolbar-left">
+        <button class="logout-btn" id="logoutBtn">Sign Out</button>
+        <span id="cloudIndicator" style="font-size:14px;cursor:pointer;" title="Cloud sync status">☁️</span>
+      </div>
+      <div class="header-toolbar-right">
+        <button class="dark-toggle" id="darkToggle" title="Toggle dark mode">🌙</button>
+        <button class="dark-toggle" id="backupBtn" title="Backup & Restore">💾</button>
+      </div>
+    </div>
     <h1>Aryona's Recipes</h1>
     <p>my personal cookbook</p>
-    <button class="dark-toggle" id="darkToggle" title="Toggle dark mode" style="right:62px;">🌙</button>
-    <button class="dark-toggle" id="backupBtn" title="Backup & Restore">💾</button>
-    <span id="cloudIndicator" style="font-size:14px;cursor:pointer;" title="Cloud sync status">☁️</span>
   </div>
 
   <!-- Tabs -->
