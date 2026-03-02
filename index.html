@@ -2704,15 +2704,11 @@ $('matchBtn').addEventListener('click', () => {
   if (!input) { showToast('Type some ingredients first!'); return; }
 
   const userIngredients = input.split('\n').map(s => s.trim()).filter(Boolean);
-  const recipes = getRecipes();
   const results = $('ideasResults');
+  let html = '';
 
-  if (recipes.length === 0) {
-    results.innerHTML = `<div class="ideas-empty">You haven't saved any recipes yet! Add some recipes first, then come back here to find matches.</div>`;
-    return;
-  }
-
-  const scored = recipes.map(r => {
+  // Search built-in recipes for new ideas based on what user has
+  const ideaScored = builtInRecipes.map(r => {
     const rIngredients = r.ingredients.toLowerCase();
     let matches = 0;
     userIngredients.forEach(ui => {
@@ -2721,25 +2717,65 @@ $('matchBtn').addEventListener('click', () => {
     return { ...r, matches, pct: Math.round((matches / userIngredients.length) * 100) };
   }).filter(r => r.matches > 0).sort((a, b) => b.pct - a.pct || b.matches - a.matches);
 
-  if (scored.length === 0) {
-    results.innerHTML = `<div class="ideas-empty">No saved recipes match those ingredients. Try different ingredients, or check out the ideas below for inspiration!</div>`;
-    return;
-  }
-
-  results.innerHTML = `<div class="ideas-section-title">Your recipes that match</div>` +
-    scored.map(r => `
-      <div class="recipe-card" data-id="${r.id}" style="margin-bottom:14px;">
-        <div class="recipe-card-inner">
-          <h3>${esc(r.name)}</h3>
-          <p class="preview" style="padding-left:30px;">${r.matches} of ${userIngredients.length} ingredients match (${r.pct}%)</p>
-          <div class="card-footer">
-            <span class="tag tag-category">${esc(r.category || 'Main Dish')}</span>
-            <span class="tag tag-count">${r.pct}% match</span>
-          </div>
+  if (ideaScored.length > 0) {
+    html += `<div class="ideas-section-title">Recipes you can make</div>`;
+    html += ideaScored.map(r => `
+      <div class="suggestion-card" data-name="${esc(r.name)}" style="margin-bottom:14px;">
+        <h4>${esc(r.name)}</h4>
+        <p>${esc(r.desc)}</p>
+        <div class="card-footer">
+          <span class="stag">${esc(r.cat)}</span>
+          <span class="tag tag-count">${r.matches} of ${userIngredients.length} ingredients (${r.pct}%)</span>
         </div>
       </div>
     `).join('');
+  }
 
+  // Also search saved recipes
+  const recipes = getRecipes();
+  if (recipes.length > 0) {
+    const savedScored = recipes.map(r => {
+      const rIngredients = r.ingredients.toLowerCase();
+      let matches = 0;
+      userIngredients.forEach(ui => {
+        if (rIngredients.includes(ui)) matches++;
+      });
+      return { ...r, matches, pct: Math.round((matches / userIngredients.length) * 100) };
+    }).filter(r => r.matches > 0).sort((a, b) => b.pct - a.pct || b.matches - a.matches);
+
+    if (savedScored.length > 0) {
+      html += `<div class="ideas-section-title" style="margin-top:18px;">From your saved recipes</div>`;
+      html += savedScored.map(r => `
+        <div class="recipe-card" data-id="${r.id}" style="margin-bottom:14px;">
+          <div class="recipe-card-inner">
+            <h3>${esc(r.name)}</h3>
+            <p class="preview" style="padding-left:30px;">${r.matches} of ${userIngredients.length} ingredients (${r.pct}%)</p>
+            <div class="card-footer">
+              <span class="tag tag-category">${esc(r.category || 'Main Dish')}</span>
+              <span class="tag tag-count">${r.pct}% match</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  if (!html) {
+    results.innerHTML = `<div class="ideas-empty">No recipes match those ingredients. Try different ingredients, or check out the ideas below for inspiration!</div>`;
+    return;
+  }
+
+  results.innerHTML = html;
+
+  // Click handlers for built-in recipe cards
+  results.querySelectorAll('.suggestion-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const idea = builtInRecipes.find(r => r.name === card.dataset.name);
+      if (idea) showIdeaDetail(idea);
+    });
+  });
+
+  // Click handlers for saved recipe cards
   results.querySelectorAll('.recipe-card').forEach(card => {
     card.addEventListener('click', () => openView(card.dataset.id));
   });
