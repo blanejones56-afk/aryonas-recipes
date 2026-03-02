@@ -2699,28 +2699,104 @@ function saveIdeaToRecipes(idea) {
   showToast('Fill in the details and hit Save!');
 }
 
-$('matchBtn').addEventListener('click', () => {
+// Convert TheMealDB meal object to our idea format
+function mealDbToIdea(meal) {
+  const ingredients = [];
+  for (let i = 1; i <= 20; i++) {
+    const ing = meal['strIngredient' + i];
+    const measure = meal['strMeasure' + i];
+    if (ing && ing.trim()) {
+      ingredients.push(measure && measure.trim() ? measure.trim() + ' ' + ing.trim() : ing.trim());
+    }
+  }
+  const catMap = { 'Beef': 'Main Dish', 'Chicken': 'Main Dish', 'Lamb': 'Main Dish', 'Pork': 'Main Dish',
+    'Seafood': 'Main Dish', 'Pasta': 'Main Dish', 'Goat': 'Main Dish', 'Miscellaneous': 'Main Dish',
+    'Side': 'Side Dish', 'Starter': 'Side Dish', 'Dessert': 'Dessert', 'Breakfast': 'Main Dish',
+    'Vegetarian': 'Main Dish', 'Vegan': 'Main Dish' };
+  return {
+    name: meal.strMeal,
+    cat: catMap[meal.strCategory] || 'Main Dish',
+    desc: (meal.strArea ? meal.strArea + ' cuisine' : '') + (meal.strCategory ? ' · ' + meal.strCategory : ''),
+    ingredients: ingredients.join('\n'),
+    steps: (meal.strInstructions || '').split(/\r?\n/).filter(s => s.trim()).join('\n'),
+    thumb: meal.strMealThumb
+  };
+}
+
+$('matchBtn').addEventListener('click', async () => {
   const input = $('ideasInput').value.trim().toLowerCase();
   if (!input) { showToast('Type some ingredients first!'); return; }
 
   const userIngredients = input.split('\n').map(s => s.trim()).filter(Boolean);
   const results = $('ideasResults');
+
+  results.innerHTML = `<div class="ideas-empty" style="text-align:center;">🔍 Searching recipes...</div>`;
+
+  let apiMeals = [];
+  let apiWorked = false;
+
+  try {
+    // Search TheMealDB for each ingredient, collect meal IDs
+    const mealCounts = {};
+    const mealData = {};
+    const fetches = userIngredients.map(ing =>
+      fetch('https://www.themealdb.com/api/json/v1/1/filter.php?i=' + encodeURIComponent(ing))
+        .then(r => r.json())
+        .then(data => {
+          if (data.meals) {
+            data.meals.forEach(m => {
+              mealCounts[m.idMeal] = (mealCounts[m.idMeal] || 0) + 1;
+              mealData[m.idMeal] = m;
+            });
+          }
+        })
+        .catch(() => {})
+    );
+    await Promise.all(fetches);
+
+    // Sort by how many of the user's ingredients each meal uses
+    const ranked = Object.entries(mealCounts)
+      .map(([id, count]) => ({ id, count, name: mealData[id].strMeal, thumb: mealData[id].strMealThumb }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+
+    if (ranked.length > 0) {
+      apiMeals = ranked;
+      apiWorked = true;
+    }
+  } catch (e) {
+    // API failed, will fall back to built-in
+  }
+
   let html = '';
 
-  // Search built-in recipes for new ideas based on what user has
+  if (apiWorked && apiMeals.length > 0) {
+    html += `<div class="ideas-section-title">Recipes you can make</div>`;
+    html += apiMeals.map(m => `
+      <div class="suggestion-card mealdb-card" data-mealid="${m.id}" style="margin-bottom:14px;cursor:pointer;">
+        ${m.thumb ? `<img src="${m.thumb}/preview" alt="" style="width:100%;border-radius:10px 10px 0 0;height:140px;object-fit:cover;">` : ''}
+        <div style="padding:${m.thumb ? '8px 14px 14px' : '14px'};">
+          <h4>${esc(m.name)}</h4>
+          <div class="card-footer">
+            <span class="tag tag-count">${m.count} of ${userIngredients.length} ingredient${userIngredients.length > 1 ? 's' : ''} match</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Also search built-in recipes as fallback/supplement
   const ideaScored = builtInRecipes.map(r => {
     const rIngredients = r.ingredients.toLowerCase();
     let matches = 0;
-    userIngredients.forEach(ui => {
-      if (rIngredients.includes(ui)) matches++;
-    });
+    userIngredients.forEach(ui => { if (rIngredients.includes(ui)) matches++; });
     return { ...r, matches, pct: Math.round((matches / userIngredients.length) * 100) };
   }).filter(r => r.matches > 0).sort((a, b) => b.pct - a.pct || b.matches - a.matches);
 
   if (ideaScored.length > 0) {
-    html += `<div class="ideas-section-title">Recipes you can make</div>`;
+    html += `<div class="ideas-section-title" style="margin-top:18px;">${apiWorked ? 'Quick ideas' : 'Recipes you can make'}</div>`;
     html += ideaScored.map(r => `
-      <div class="suggestion-card" data-name="${esc(r.name)}" style="margin-bottom:14px;">
+      <div class="suggestion-card builtin-card" data-name="${esc(r.name)}" style="margin-bottom:14px;">
         <h4>${esc(r.name)}</h4>
         <p>${esc(r.desc)}</p>
         <div class="card-footer">
@@ -2737,9 +2813,7 @@ $('matchBtn').addEventListener('click', () => {
     const savedScored = recipes.map(r => {
       const rIngredients = r.ingredients.toLowerCase();
       let matches = 0;
-      userIngredients.forEach(ui => {
-        if (rIngredients.includes(ui)) matches++;
-      });
+      userIngredients.forEach(ui => { if (rIngredients.includes(ui)) matches++; });
       return { ...r, matches, pct: Math.round((matches / userIngredients.length) * 100) };
     }).filter(r => r.matches > 0).sort((a, b) => b.pct - a.pct || b.matches - a.matches);
 
@@ -2761,14 +2835,31 @@ $('matchBtn').addEventListener('click', () => {
   }
 
   if (!html) {
-    results.innerHTML = `<div class="ideas-empty">No recipes match those ingredients. Try different ingredients, or check out the ideas below for inspiration!</div>`;
+    results.innerHTML = `<div class="ideas-empty">No recipes match those ingredients. Try different ingredients, or check out the ideas below!</div>`;
     return;
   }
 
   results.innerHTML = html;
 
+  // Click handlers for TheMealDB cards — fetch full recipe on click
+  results.querySelectorAll('.mealdb-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const mealId = card.dataset.mealid;
+      showToast('Loading recipe...');
+      try {
+        const res = await fetch('https://www.themealdb.com/api/json/v1/1/lookup.php?i=' + mealId);
+        const data = await res.json();
+        if (data.meals && data.meals[0]) {
+          showIdeaDetail(mealDbToIdea(data.meals[0]));
+        }
+      } catch (e) {
+        showToast('Could not load recipe. Check your connection.');
+      }
+    });
+  });
+
   // Click handlers for built-in recipe cards
-  results.querySelectorAll('.suggestion-card').forEach(card => {
+  results.querySelectorAll('.builtin-card').forEach(card => {
     card.addEventListener('click', () => {
       const idea = builtInRecipes.find(r => r.name === card.dataset.name);
       if (idea) showIdeaDetail(idea);
